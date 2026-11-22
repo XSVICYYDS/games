@@ -1,0 +1,551 @@
+/* ===== 全局与画布 ===== */
+:root {
+  --ink: #eef4f6;
+  --muted: #9cabb3;
+  --panel: rgba(19, 27, 31, .96);
+  --panel-soft: rgba(14, 21, 25, .72);
+  --line: rgba(213, 231, 226, .16);
+  --green: #b7df72;
+  --green-deep: #6e9f45;
+  --amber: #f1c66d;
+  --cyan: #84c9d4;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden;
+  background: #0b1115; color: var(--ink);
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+button, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+#game { display: block; width: 100%; height: 100%; cursor: crosshair; }
+
+/* ===== 准星 ===== */
+#crosshair {
+  position: fixed; left: 50%; top: 50%; width: 20px; height: 20px;
+  transform: translate(-50%, -50%); pointer-events: none; opacity: 0;
+  transition: opacity .16s ease; filter: drop-shadow(0 1px 1px #000);
+}
+#crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; }
+#crosshair::before { left: 9px; top: 0; width: 2px; height: 20px; }
+#crosshair::after { left: 0; top: 9px; width: 20px; height: 2px; }
+body.playing #crosshair { opacity: .92; }
+body.inventory-open #crosshair { opacity: 0; }
+
+/* ===== 挖掘进度条 ===== */
+#dig-progress {
+  position: fixed; left: 50%; top: calc(50% + 24px); width: 66px; height: 6px;
+  transform: translateX(-50%); overflow: hidden; pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, .24); border-radius: 3px;
+  background: rgba(8, 14, 16, .74); opacity: 0; transition: opacity .12s ease; z-index: 6;
+}
+#dig-progress.visible { opacity: 1; }
+#dig-progress i {
+  display: block; width: 0; height: 100%;
+  background: linear-gradient(90deg, #9fce5f, #f1c66d);
+}
+body.inventory-open #dig-progress { opacity: 0; }
+
+/* ===== 游戏 HUD ===== */
+#hud {
+  position: fixed; left: 16px; top: 16px; min-width: 184px; padding: 11px 13px;
+  border: 1px solid var(--line); border-radius: 5px;
+  background: linear-gradient(135deg, rgba(16, 25, 29, .82), rgba(16, 25, 29, .55));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .04), 0 8px 24px rgba(0, 0, 0, .14);
+  font: 12px/1.65 "Consolas", "Microsoft YaHei", monospace;
+  color: #d6e0e3; pointer-events: none; opacity: 0; transition: opacity .18s ease;
+}
+body.playing #hud { opacity: 1; }
+.hud-brand { margin-bottom: 4px; color: #d9e6e8; font-size: 11px; letter-spacing: 2px; }
+.hud-brand b { margin-left: 5px; color: var(--green); }
+#hud-pos { color: var(--green); }
+#hud-fps { color: var(--cyan); }
+#hud-block { margin-top: 3px; color: var(--amber); font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+
+#hud-hint {
+  position: fixed; left: 16px; bottom: 16px; max-width: 410px;
+  display: flex; flex-wrap: wrap; gap: 5px; pointer-events: none;
+  opacity: 0; transition: opacity .18s ease;
+}
+body.playing #hud-hint { opacity: .78; }
+#hud-hint span {
+  padding: 3px 7px; border: 1px solid rgba(255, 255, 255, .1); border-radius: 4px;
+  background: rgba(12, 19, 22, .62); color: #d4dfe2; font-size: 11px;
+}
+
+/* ===== 底部快捷栏 ===== */
+#hotbar-wrap {
+  position: fixed; left: 50%; bottom: 17px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  pointer-events: none; opacity: 0; transition: opacity .18s ease;
+}
+body.playing #hotbar-wrap { opacity: 1; }
+#hotbar-name {
+  padding: 4px 12px; border: 1px solid rgba(241, 198, 109, .28); border-radius: 4px;
+  background: rgba(16, 23, 27, .82); color: var(--amber); font-size: 12px;
+  letter-spacing: .5px; box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+}
+#hotbar {
+  display: flex; gap: 5px; padding: 6px; border: 1px solid rgba(223, 235, 230, .2);
+  border-radius: 6px; background: rgba(15, 22, 25, .82);
+  box-shadow: inset 0 1px rgba(255, 255, 255, .05), 0 10px 30px rgba(0, 0, 0, .28);
+}
+#hotbar-page { color: rgba(221, 231, 232, .72); font: 10px/1.4 "Consolas", "Microsoft YaHei", monospace; text-shadow: 0 1px 2px #000; }
+
+/* ===== 手持状态：方块 / 武器模式、耐久与箭矢 ===== */
+#hand-bar {
+  display: flex; align-items: center; gap: 7px; padding: 3px 8px;
+  border: 1px solid rgba(213, 231, 226, .16); border-radius: 4px;
+  background: rgba(13, 21, 24, .78); font-size: 11px; pointer-events: auto;
+}
+#hand-switch {
+  padding: 3px 8px; border: 1px solid rgba(183, 223, 114, .4); border-radius: 3px;
+  background: rgba(183, 223, 114, .12); color: var(--green); font-size: 10px; cursor: pointer;
+  touch-action: manipulation;
+}
+#hand-switch.item { border-color: rgba(241, 198, 109, .5); background: rgba(241, 198, 109, .14); color: var(--amber); }
+#hand-label { color: #dbe6e3; }
+#hand-durability { width: 54px; height: 5px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, .12); }
+#hand-durability i { display: block; height: 100%; width: 100%; background: #7fc45c; transition: width .12s linear; }
+#hand-durability[data-level="warn"] i { background: var(--amber); }
+#hand-durability[data-level="low"] i { background: #e35c5c; }
+#hand-arrows { color: var(--cyan); font: 10px/1.4 "Consolas", monospace; }
+#hand-arrows[hidden], #hand-durability[hidden] { display: none; }
+.slot .dur-bar {
+  position: absolute; left: 3px; right: 3px; bottom: 2px; height: 3px;
+  border-radius: 2px; background: #e35c5c; box-shadow: 0 0 4px rgba(227, 92, 92, .6);
+}
+
+/* 弓的蓄力条 */
+#bow-charge {
+  position: fixed; left: 50%; top: calc(50% + 34px); width: 90px; height: 7px;
+  transform: translateX(-50%); z-index: 6; overflow: hidden; border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, .28); background: rgba(8, 14, 16, .72);
+  opacity: 0; pointer-events: none; transition: opacity .1s ease;
+}
+#bow-charge.visible { opacity: 1; }
+#bow-charge i { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #84c9d4, #b7df72); }
+#bow-charge.full i { background: linear-gradient(90deg, #f1c66d, #ffe89a); box-shadow: 0 0 8px rgba(241, 198, 109, .8); }
+.slot {
+  position: relative; display: grid; place-items: center; width: 50px; height: 50px;
+  border: 2px solid rgba(223, 235, 230, .18); border-radius: 3px;
+  background: rgba(226, 237, 232, .055); transition: transform .1s, border-color .1s, background .1s;
+}
+.slot img { width: 38px; height: 38px; image-rendering: pixelated; pointer-events: none; }
+.slot .num { position: absolute; right: 3px; bottom: 2px; color: #c9d3d5; font: 10px/1 "Consolas", monospace; text-shadow: 0 1px 2px #000; }
+.slot.active {
+  border-color: var(--amber); background: rgba(241, 198, 109, .13); transform: translateY(-4px);
+  box-shadow: 0 0 0 1px rgba(241, 198, 109, .25), 0 5px 14px rgba(0, 0, 0, .28);
+}
+
+/* ===== 1001 方块背包 ===== */
+#inventory {
+  position: fixed; inset: 0; z-index: 15; display: none; place-items: center; padding: 20px;
+  background: rgba(7, 12, 14, .66); backdrop-filter: blur(5px) saturate(.75);
+}
+#inventory.visible { display: grid; }
+.inv-panel {
+  width: min(1100px, 96vw); height: min(716px, 93vh); padding: 18px 20px 14px;
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid rgba(219, 232, 226, .22); border-radius: 7px;
+  background: linear-gradient(145deg, rgba(29, 38, 41, .98), rgba(16, 24, 28, .98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06), 0 28px 90px rgba(0, 0, 0, .58);
+}
+.inv-header { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; }
+.inv-eyebrow { margin-bottom: 1px; color: #8d9da1; font: 9px/1.2 "Consolas", monospace; letter-spacing: 3px; }
+.inv-header h2 { margin: 0; color: #edf3ef; font-size: 22px; font-weight: 600; letter-spacing: 2px; }
+.inv-header h2 span { margin-left: 8px; color: var(--green); font: 15px/1 "Consolas", monospace; vertical-align: middle; }
+.icon-btn {
+  width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 4px;
+  background: rgba(255, 255, 255, .045); color: #bac7c9; font-size: 24px; line-height: 1; cursor: pointer;
+}
+.icon-btn:hover { border-color: #b7c7c6; background: rgba(255, 255, 255, .09); color: #fff; }
+
+.inv-toolbar { display: flex; align-items: center; gap: 14px; margin: 14px 0 10px; flex: 0 0 auto; }
+.inv-search {
+  flex: 1; height: 38px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  border: 1px solid rgba(213, 231, 226, .18); border-radius: 4px; background: rgba(6, 12, 15, .38);
+}
+.inv-search:focus-within { border-color: rgba(183, 223, 114, .55); box-shadow: 0 0 0 2px rgba(183, 223, 114, .07); }
+.inv-search span { color: var(--green); font-size: 11px; letter-spacing: 1px; }
+.inv-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: #edf3f0; font-size: 13px; user-select: text; }
+.inv-search input::placeholder { color: #718187; }
+.inv-count { min-width: 80px; color: #9aabad; font: 12px/1 "Consolas", "Microsoft YaHei", monospace; text-align: right; }
+
+.inv-categories { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 11px; flex: 0 0 auto; }
+.category-btn {
+  padding: 5px 10px; border: 1px solid rgba(213, 231, 226, .13); border-radius: 3px;
+  background: rgba(255, 255, 255, .035); color: #9fadb0; font-size: 11px; cursor: pointer;
+}
+.category-btn:hover { color: #e6efec; background: rgba(255, 255, 255, .07); }
+.category-btn.active { border-color: rgba(183, 223, 114, .45); background: rgba(183, 223, 114, .12); color: var(--green); }
+
+.inv-content { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 184px; gap: 14px; }
+#inventory-grid {
+  min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 1px 5px 1px 1px;
+  display: grid; grid-template-columns: repeat(9, minmax(54px, 1fr)); grid-auto-rows: 77px;
+  align-content: start; gap: 6px; scrollbar-width: thin; scrollbar-color: #52625f transparent;
+}
+#inventory-grid::-webkit-scrollbar { width: 7px; }
+#inventory-grid::-webkit-scrollbar-thumb { border-radius: 4px; background: #52625f; }
+.inv-item {
+  position: relative; min-width: 0; height: 77px; padding: 10px 3px 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  border: 1px solid rgba(213, 231, 226, .13); border-radius: 3px;
+  background: rgba(224, 235, 229, .045); color: #dbe4e2; cursor: pointer;
+  transition: border-color .1s, background .1s, transform .1s;
+}
+.inv-item:hover { z-index: 1; border-color: rgba(213, 231, 226, .36); background: rgba(224, 235, 229, .09); transform: translateY(-1px); }
+.inv-item.active { border-color: var(--amber); background: rgba(241, 198, 109, .12); box-shadow: inset 0 0 0 1px rgba(241, 198, 109, .16); }
+.inv-item img { width: 39px; height: 39px; flex: 0 0 auto; image-rendering: pixelated; pointer-events: none; }
+.inv-id { position: absolute; left: 3px; top: 2px; color: #75868a; font: 8px/1 "Consolas", monospace; }
+.inv-item.active .inv-id { color: var(--amber); }
+.inv-label { width: 100%; overflow: hidden; color: #cdd8d6; font-size: 10px; line-height: 14px; text-align: center; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+.inv-glow-dot {
+  position: absolute; left: 5px; top: 14px; width: 5px; height: 5px; border-radius: 50%;
+  background: #ffd76a; box-shadow: 0 0 5px rgba(255, 215, 106, .9); pointer-events: none;
+}
+.inv-empty { grid-column: 1 / -1; padding: 60px 20px; color: #8c9da0; font-size: 13px; text-align: center; }
+
+.inv-details {
+  min-height: 0; padding: 15px 13px; border: 1px solid rgba(213, 231, 226, .13); border-radius: 5px;
+  background: rgba(7, 13, 16, .28); text-align: center;
+}
+.inv-preview-wrap {
+  width: 104px; height: 104px; margin: 2px auto 13px; display: grid; place-items: center;
+  border: 1px solid rgba(213, 231, 226, .14); border-radius: 5px;
+  background: radial-gradient(circle, rgba(183, 223, 114, .09), rgba(255, 255, 255, .025));
+}
+#inventory-preview { width: 80px; height: 80px; image-rendering: pixelated; filter: drop-shadow(0 8px 8px rgba(0, 0, 0, .25)); }
+.inv-selected-name { color: #f0f4ef; font-size: 16px; font-weight: 600; }
+.inv-selected-meta { margin-top: 4px; color: var(--amber); font: 10px/1.4 "Consolas", "Microsoft YaHei", monospace; }
+.inv-stats { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 7px; }
+.inv-stat {
+  padding: 2px 6px; border: 1px solid rgba(132, 201, 212, .24); border-radius: 3px;
+  background: rgba(132, 201, 212, .07); color: #a9c3c8;
+  font: 9px/1.5 "Consolas", "Microsoft YaHei", monospace; white-space: nowrap;
+}
+.inv-selected-desc { min-height: 52px; margin: 12px 0; color: #9dadaf; font-size: 11px; line-height: 1.65; }
+.primary-btn {
+  width: 100%; padding: 9px 12px; border: 1px solid #a7cb70; border-radius: 4px;
+  background: linear-gradient(#b7df72, #89b552); color: #1b2b16; font-size: 12px; font-weight: 700; cursor: pointer;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .28);
+}
+.primary-btn:hover { filter: brightness(1.08); }
+.inv-detail-tip { margin: 12px 0 0; color: #65777b; font-size: 10px; line-height: 1.6; }
+
+.inv-footer { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding-top: 12px; }
+.page-btn {
+  padding: 6px 12px; border: 1px solid rgba(213, 231, 226, .16); border-radius: 3px;
+  background: rgba(255, 255, 255, .045); color: #c5d1d0; font-size: 11px; cursor: pointer;
+}
+.page-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .09); color: #fff; }
+.page-btn:disabled { opacity: .3; cursor: default; }
+#inventory-page { min-width: 86px; color: #aab9b9; font: 11px/1 "Consolas", "Microsoft YaHei", monospace; text-align: center; }
+.inv-key-tip { margin-left: auto; color: #718185; font-size: 10px; }
+
+/* ===== 浮动提示 ===== */
+#toast {
+  position: fixed; left: 50%; bottom: 112px; z-index: 30; max-width: min(560px, 90vw);
+  transform: translateX(-50%) translateY(6px); padding: 8px 15px;
+  border: 1px solid rgba(213, 231, 226, .18); border-radius: 4px;
+  background: rgba(13, 21, 24, .92); color: #edf4f1; font-size: 12px; text-align: center;
+  opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== 开始 / 暂停面板 ===== */
+#overlay {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 22px;
+  background: radial-gradient(circle at 50% 32%, rgba(36, 55, 57, .78), rgba(7, 12, 15, .94));
+  backdrop-filter: blur(4px); transition: opacity .2s;
+}
+#overlay.hidden { opacity: 0; pointer-events: none; }
+.panel {
+  width: min(590px, 100%); padding: 27px 30px 22px; border: 1px solid rgba(213, 231, 226, .17);
+  border-radius: 7px; background: rgba(20, 29, 33, .95); box-shadow: 0 26px 80px rgba(0, 0, 0, .55); text-align: center;
+}
+.panel-mark { margin-bottom: 9px; color: #8da19d; font: 9px/1 "Consolas", monospace; letter-spacing: 4px; }
+.panel h1 { margin: 0 0 7px; color: #eaf3e8; font-size: 31px; font-weight: 650; letter-spacing: 6px; }
+.panel .sub { margin: 0 0 18px; color: #9fb1ae; font-size: 12px; letter-spacing: 1px; }
+#loading { margin-bottom: 16px; }
+.bar { height: 7px; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, .08); }
+#loading-bar { width: 0; height: 100%; background: linear-gradient(90deg, #6e9f45, #b7df72); transition: width .12s linear; }
+#loading-text { margin-top: 8px; color: #8fa29f; font: 11px/1.4 "Consolas", "Microsoft YaHei", monospace; }
+#loading.done { display: none; }
+.keys {
+  list-style: none; margin: 0 0 18px; padding: 12px 14px; border: 1px solid rgba(213, 231, 226, .1);
+  border-radius: 4px; background: rgba(255, 255, 255, .03); color: #c1cecb;
+  font-size: 12px; line-height: 1.9; text-align: left;
+}
+.keys b { color: var(--green); font-weight: 600; }
+.save-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 7px; }
+.save-btn {
+  padding: 8px 12px; border: 1px solid rgba(132, 201, 212, .34); border-radius: 4px;
+  background: rgba(132, 201, 212, .09); color: #b9dce2; font-size: 12px; cursor: pointer;
+}
+.save-btn:hover:not(:disabled) { border-color: rgba(132, 201, 212, .7); background: rgba(132, 201, 212, .16); color: #edf9fb; }
+.save-btn:disabled { opacity: .38; cursor: default; }
+.save-status { min-height: 16px; margin: 0 0 9px; color: #829794; font: 10px/1.5 "Consolas", "Microsoft YaHei", monospace; }
+#start-btn {
+  width: 100%; padding: 12px 18px; border: 1px solid #aed475; border-radius: 4px;
+  background: linear-gradient(#b7df72, #83ad50); color: #1b2b16; font-size: 15px; font-weight: 700;
+  letter-spacing: 2px; cursor: pointer; box-shadow: inset 0 1px rgba(255, 255, 255, .3);
+}
+#start-btn:hover:not(:disabled) { filter: brightness(1.08); }
+#start-btn:disabled { border-color: var(--line); background: rgba(255, 255, 255, .07); color: #758581; cursor: default; box-shadow: none; }
+.error { margin-top: 13px; padding: 10px 12px; border: 1px solid rgba(255, 110, 100, .45); border-radius: 4px; background: rgba(180, 50, 45, .14); color: #ffb9b2; font-size: 12px; text-align: left; white-space: pre-wrap; }
+.panel .tip { margin: 13px 0 0; color: #6f817e; font-size: 10px; }
+
+/* ===== 模式 / 时间 / 生命 HUD ===== */
+.hud-row { display: flex; align-items: center; gap: 7px; margin: 2px 0 4px; }
+#hud-mode {
+  padding: 1px 6px; border: 1px solid rgba(183, 223, 114, .3); border-radius: 3px;
+  background: rgba(183, 223, 114, .12); color: var(--green); font-size: 10px; line-height: 1.6;
+}
+#hud-mode[data-mode="creative"] { border-color: rgba(132, 201, 212, .36); background: rgba(132, 201, 212, .13); color: var(--cyan); }
+#hud-mode[data-mode="adventure"] { border-color: rgba(241, 198, 109, .4); background: rgba(241, 198, 109, .13); color: var(--amber); }
+#hud-mode[data-mode="spectator"] { border-color: rgba(180, 160, 210, .42); background: rgba(180, 160, 210, .14); color: #c8b6e4; }
+#hud-time { color: #9fb3bd; font-size: 10px; }
+#hud-time.night { color: #92a8e2; }
+#hud-dim {
+  padding: 1px 6px; border: 1px solid rgba(132, 201, 212, .32); border-radius: 3px;
+  background: rgba(132, 201, 212, .12); color: var(--cyan); font-size: 10px; line-height: 1.6;
+}
+#hud-dim[data-dimension="nether"] {
+  border-color: rgba(227, 92, 92, .42); background: rgba(227, 92, 92, .14); color: #ff9a7a;
+}
+#hud-dim[data-dimension="end"] {
+  border-color: rgba(200, 160, 255, .4); background: rgba(160, 120, 230, .16); color: #d0b0ff;
+}
+#hud-biome { color: #b9c8cf; font-size: 10px; }
+.hud-health { display: flex; gap: 1px; margin: 1px 0 4px; font-size: 13px; line-height: 1; }
+.hud-health .heart { color: #e35c5c; text-shadow: 0 0 4px rgba(227, 92, 92, .4); }
+.hud-health .heart.empty { color: rgba(255, 255, 255, .15); text-shadow: none; }
+.hud-health.low .heart:not(.empty) { animation: heart-beat .9s ease-in-out infinite; }
+@keyframes heart-beat { 50% { transform: scale(1.22); } }
+
+/* ===== 开始界面模式选择 ===== */
+.mode-select { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin: 0 0 14px; }
+.mode-btn {
+  padding: 8px 11px; border: 1px solid rgba(213, 231, 226, .15); border-radius: 4px;
+  background: rgba(255, 255, 255, .035); color: #c7d2cf; text-align: left; cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.mode-btn b { display: block; margin-bottom: 2px; color: #e9f1ea; font-size: 13px; letter-spacing: 1px; }
+.mode-btn span { display: block; color: #84969a; font-size: 10px; line-height: 1.5; }
+.mode-btn:hover { border-color: rgba(213, 231, 226, .36); background: rgba(255, 255, 255, .07); }
+.mode-btn.active { border-color: rgba(183, 223, 114, .62); background: rgba(183, 223, 114, .12); }
+.mode-btn.active b { color: var(--green); }
+
+/* ===== 交互面板（箱子 / 熔炉 / 村民） ===== */
+#interact {
+  position: fixed; inset: 0; z-index: 16; display: none; place-items: center; padding: 20px;
+  background: rgba(7, 12, 14, .66); backdrop-filter: blur(5px) saturate(.75);
+}
+#interact.visible { display: grid; }
+.interact-panel {
+  width: min(560px, 94vw); max-height: 90vh; overflow-y: auto; padding: 20px 22px 15px;
+  border: 1px solid rgba(219, 232, 226, .22); border-radius: 7px;
+  background: linear-gradient(145deg, rgba(29, 38, 41, .98), rgba(16, 24, 28, .98));
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06), 0 28px 90px rgba(0, 0, 0, .58);
+}
+.interact-header { display: flex; align-items: flex-start; justify-content: space-between; }
+.interact-eyebrow { margin-bottom: 2px; color: #8d9da1; font: 9px/1.2 "Consolas", monospace; letter-spacing: 3px; }
+.interact-header h3 { margin: 0; color: #edf3ef; font-size: 20px; font-weight: 600; letter-spacing: 2px; }
+.interact-desc { margin: 10px 0 12px; color: #9fb0b2; font-size: 12px; line-height: 1.7; }
+.pouch {
+  display: flex; flex-wrap: wrap; gap: 5px; min-height: 38px; padding: 8px; margin-bottom: 12px;
+  border: 1px dashed rgba(213, 231, 226, .15); border-radius: 4px; background: rgba(0, 0, 0, .18);
+}
+.pouch-chip {
+  padding: 2px 7px; border: 1px solid rgba(132, 201, 212, .22); border-radius: 3px;
+  background: rgba(132, 201, 212, .1); color: #bfe0e4; font: 10px/1.6 "Consolas", "Microsoft YaHei", monospace;
+}
+.pouch-empty { color: #7d8e91; font-size: 11px; line-height: 20px; }
+.interact-body { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.interact-line { padding: 7px 10px; border-radius: 3px; background: rgba(255, 255, 255, .04); color: #cdd9d7; font-size: 12px; line-height: 1.6; }
+.interact-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.interact-btn {
+  flex: 1 1 190px; padding: 9px 12px; border: 1px solid rgba(213, 231, 226, .22); border-radius: 4px;
+  background: rgba(255, 255, 255, .06); color: #e3ece8; font-size: 12px; cursor: pointer;
+}
+.interact-btn:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
+.interact-btn.primary {
+  border-color: #a7cb70; background: linear-gradient(#b7df72, #89b552); color: #1b2b16; font-weight: 700;
+}
+.interact-btn:disabled { opacity: .34; cursor: default; }
+.interact-tip { margin: 12px 0 0; color: #66787c; font-size: 10px; text-align: center; }
+
+/* ===== 小窗口适配 ===== */
+@media (max-width: 1050px) {
+  #inventory-grid { grid-template-columns: repeat(8, minmax(52px, 1fr)); }
+  .inv-content { grid-template-columns: minmax(0, 1fr) 168px; gap: 10px; }
+  #hud-hint { max-width: 280px; }
+}
+@media (max-width: 790px) {
+  #inventory { padding: 8px; }
+  .inv-panel { width: 100%; height: 96vh; padding: 14px 12px 11px; }
+  .inv-content { display: block; overflow: hidden; }
+  .inv-details { display: none; }
+  #inventory-grid { height: 100%; grid-template-columns: repeat(6, minmax(48px, 1fr)); }
+  .inv-key-tip { display: none; }
+  .slot { width: 42px; height: 42px; }
+  .slot img { width: 32px; height: 32px; }
+  #hotbar { gap: 3px; padding: 5px; }
+  #hud-hint { display: none; }
+}
+
+/* ===== 全屏、手机模式与安全区 ===== */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+#game { touch-action: none; }
+#system-controls {
+  position: fixed; z-index: 25; right: calc(var(--safe-right) + 10px); top: calc(var(--safe-top) + 10px);
+  display: flex; gap: 7px; pointer-events: auto;
+}
+body.inventory-open #system-controls { display: none; }
+.system-btn {
+  min-width: 64px; min-height: 36px; padding: 7px 10px; border: 1px solid rgba(213, 231, 226, .24);
+  border-radius: 5px; background: rgba(13, 21, 24, .82); color: #dce8e5; font-size: 12px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .22); cursor: pointer; touch-action: manipulation;
+}
+.system-btn:active, .system-btn.active { border-color: var(--green); background: rgba(68, 92, 54, .9); color: #efffdf; }
+#rotate-tip {
+  position: fixed; inset: 0; z-index: 60; display: none; place-items: center; padding: 30px;
+  background: #0b1418; color: var(--ink); text-align: center; touch-action: none;
+}
+body.mobile-mode.orientation-blocked #rotate-tip { display: grid; }
+.rotate-phone {
+  width: 42px; height: 70px; margin: 0 auto 20px; border: 3px solid var(--green); border-radius: 8px;
+  transform: rotate(90deg); box-shadow: 0 0 24px rgba(183, 223, 114, .18);
+}
+#rotate-tip h2 { margin: 0 0 9px; color: var(--green); font-size: 24px; letter-spacing: 3px; }
+#rotate-tip p { margin: 0; color: #a9babd; font-size: 13px; line-height: 1.8; }
+
+/* ===== 移动端多点触控层 ===== */
+#mobile-controls { display: none; position: fixed; inset: 0; z-index: 8; pointer-events: none; }
+body.mobile-mode.playing #mobile-controls { display: block; }
+body.mobile-mode.playing.inventory-open #mobile-controls,
+body.mobile-mode.playing.orientation-blocked #mobile-controls { display: none; }
+#mobile-controls button { pointer-events: auto; touch-action: none; }
+#mobile-joystick {
+  position: absolute; left: calc(var(--safe-left) + 22px); bottom: calc(var(--safe-bottom) + 20px);
+  width: 126px; height: 126px; border: 2px solid rgba(230, 242, 237, .25); border-radius: 50%;
+  background: radial-gradient(circle, rgba(213, 231, 226, .08), rgba(10, 17, 20, .44));
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, .25); pointer-events: auto; touch-action: none;
+}
+#mobile-joystick::before, #mobile-joystick::after {
+  content: ""; position: absolute; left: 50%; top: 50%; background: rgba(230, 242, 237, .12); transform: translate(-50%, -50%);
+}
+#mobile-joystick::before { width: 76%; height: 1px; }
+#mobile-joystick::after { width: 1px; height: 76%; }
+#mobile-joystick.active { border-color: rgba(183, 223, 114, .65); background-color: rgba(70, 95, 52, .2); }
+#mobile-stick {
+  position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px;
+  border: 2px solid rgba(238, 248, 241, .42); border-radius: 50%; background: rgba(80, 103, 91, .82);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .3); pointer-events: none; will-change: transform;
+}
+#mobile-joystick.active #mobile-stick { border-color: var(--green); background: rgba(111, 151, 75, .9); }
+.joystick-label {
+  position: absolute; left: 50%; top: calc(100% + 5px); transform: translateX(-50%); color: rgba(230, 240, 237, .68);
+  font-size: 10px; letter-spacing: 2px; pointer-events: none;
+}
+#mobile-actions {
+  position: absolute; right: calc(var(--safe-right) + 18px); bottom: calc(var(--safe-bottom) + 18px);
+  width: 154px; height: 142px; pointer-events: none;
+}
+.mobile-action {
+  position: absolute; width: 66px; height: 66px; border: 2px solid rgba(230, 242, 237, .3); border-radius: 50%;
+  background: rgba(20, 31, 34, .72); color: #edf4f1; font-size: 13px; font-weight: 600;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .08), 0 4px 14px rgba(0, 0, 0, .22);
+}
+.mobile-action.pressed { border-color: var(--amber); background: rgba(126, 96, 43, .88); transform: scale(.93); }
+#mobile-jump { right: 0; bottom: 68px; }
+#mobile-down { right: 76px; bottom: 0; }
+#mobile-dig { right: 0; bottom: 0; border-color: rgba(241, 198, 109, .5); }
+#mobile-use { right: 76px; bottom: 68px; border-color: rgba(183, 223, 114, .45); }
+#mobile-top-actions {
+  position: absolute; right: calc(var(--safe-right) + 12px); top: calc(var(--safe-top) + 56px);
+  display: flex; gap: 7px; pointer-events: auto;
+}
+.mobile-small-btn {
+  min-width: 52px; min-height: 38px; padding: 7px 10px; border: 1px solid rgba(213, 231, 226, .25);
+  border-radius: 5px; background: rgba(13, 21, 24, .74); color: #dce8e5; font-size: 12px;
+}
+.mobile-small-btn:active { border-color: var(--green); background: rgba(68, 92, 54, .9); }
+body.mobile-mode #hotbar-wrap { z-index: 9; bottom: calc(var(--safe-bottom) + 10px); }
+body.mobile-mode #hand-bar { font-size: 10px; gap: 5px; padding: 2px 6px; }
+body.mobile-mode #hand-durability { width: 42px; }
+body.mobile-mode #hand-switch { min-height: 26px; }
+body.mobile-mode #hotbar .slot, body.mobile-mode #hotbar-page { pointer-events: auto; touch-action: manipulation; }
+body.mobile-mode #hotbar-page { padding: 4px 8px; cursor: pointer; }
+body.mobile-mode #hud-hint { display: none; }
+body.mobile-mode #hud {
+  left: calc(var(--safe-left) + 10px); top: calc(var(--safe-top) + 10px); min-width: 148px; padding: 7px 9px;
+  font-size: 10px; line-height: 1.45;
+}
+body.mobile-mode .hud-brand, body.mobile-mode #hud-block { display: none; }
+body.mobile-mode #toast { bottom: calc(var(--safe-bottom) + 90px); }
+body.mobile-mode #inventory {
+  padding: calc(var(--safe-top) + 6px) calc(var(--safe-right) + 8px) calc(var(--safe-bottom) + 6px) calc(var(--safe-left) + 8px);
+}
+body.mobile-mode .inv-panel { width: 100%; height: 100%; max-height: none; padding: 10px 12px 8px; }
+body.mobile-mode .inv-header h2 { font-size: 17px; }
+body.mobile-mode .inv-eyebrow, body.mobile-mode .inv-details, body.mobile-mode .inv-key-tip { display: none; }
+body.mobile-mode .inv-toolbar { margin: 7px 0 6px; gap: 8px; }
+body.mobile-mode .inv-search { height: 34px; }
+body.mobile-mode .inv-categories {
+  flex-wrap: nowrap; overflow-x: auto; margin-bottom: 6px; padding-bottom: 3px; overscroll-behavior: contain;
+  scrollbar-width: thin; touch-action: pan-x;
+}
+body.mobile-mode .category-btn { flex: 0 0 auto; padding: 5px 9px; }
+body.mobile-mode .inv-content { display: block; min-height: 0; overflow: hidden; }
+body.mobile-mode #inventory-grid {
+  height: 100%; grid-template-columns: repeat(9, minmax(48px, 1fr)); grid-auto-rows: 68px; gap: 5px;
+  touch-action: pan-y; -webkit-overflow-scrolling: touch;
+}
+body.mobile-mode .inv-item { height: 68px; padding-top: 7px; }
+body.mobile-mode .inv-item img { width: 34px; height: 34px; }
+body.mobile-mode .inv-footer { padding-top: 6px; }
+body.mobile-mode .page-btn { min-height: 34px; }
+body.mobile-mode .panel {
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 16px); overflow-y: auto; padding: 16px 20px 14px;
+}
+body.mobile-mode .panel .keys { display: none; }
+.mobile-start-help { display: none; margin: 9px 0 0; color: #9fb1ae; font-size: 11px; line-height: 1.7; }
+body.mobile-mode .mobile-start-help { display: block; }
+body.mobile-mode .panel h1 { font-size: 25px; }
+body.mobile-mode .panel .sub { margin-bottom: 10px; }
+body.mobile-mode .mode-select { margin-bottom: 9px; }
+body.mobile-mode .mode-btn { padding: 6px 10px; }
+body.mobile-mode .panel .tip { margin-top: 8px; }
+
+@media (max-height: 500px) {
+  body.mobile-mode #hotbar-name { display: none; }
+  body.mobile-mode #hotbar-wrap { gap: 2px; }
+  body.mobile-mode .slot { width: 36px; height: 36px; border-width: 1px; }
+  body.mobile-mode .slot img { width: 29px; height: 29px; }
+  body.mobile-mode #hotbar { gap: 2px; padding: 4px; }
+  body.mobile-mode #hotbar-page { font-size: 9px; }
+  #mobile-joystick { width: 112px; height: 112px; left: calc(var(--safe-left) + 16px); bottom: calc(var(--safe-bottom) + 16px); }
+  #mobile-stick { width: 48px; height: 48px; margin: -24px 0 0 -24px; }
+  #mobile-actions { right: calc(var(--safe-right) + 13px); bottom: calc(var(--safe-bottom) + 12px); transform: scale(.9); transform-origin: right bottom; }
+  #mobile-top-actions { top: calc(var(--safe-top) + 51px); }
+  body.mobile-mode #hud-pos, body.mobile-mode #hud-fps { display: none; }
+  body.mobile-mode .inv-header h2 span { font-size: 12px; }
+  body.mobile-mode .inv-selected-desc { margin: 5px 0; }
+}
+
+@media (max-width: 700px) and (orientation: landscape) {
+  body.mobile-mode #inventory-grid { grid-template-columns: repeat(7, minmax(46px, 1fr)); }
+  body.mobile-mode .inv-count { min-width: 66px; font-size: 10px; }
+  #system-controls { right: calc(var(--safe-right) + 7px); top: calc(var(--safe-top) + 7px); }
+  .system-btn { min-width: 56px; min-height: 34px; padding: 6px 8px; font-size: 11px; }
+}

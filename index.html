@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>体素工坊 · 1001 方块沙盒</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <!-- Three.js 渲染画布 -->
+  <canvas id="game"></canvas>
+
+  <!-- 全屏与手机模式始终可用，避开刘海和圆角安全区 -->
+  <div id="system-controls" role="group" aria-label="显示设置">
+    <button id="mobile-toggle" class="system-btn" type="button" aria-pressed="false">手机模式</button>
+    <button id="fullscreen-btn" class="system-btn" type="button">全屏</button>
+  </div>
+  <div id="rotate-tip" role="status" aria-live="polite">
+    <div>
+      <div class="rotate-phone" aria-hidden="true"></div>
+      <h2>请横屏游玩</h2>
+      <p>旋转设备后自动返回游戏<br />横屏可同时移动、转动视角和挖掘</p>
+    </div>
+  </div>
+  <div id="crosshair" aria-hidden="true"></div>
+  <!-- 挖掘进度：按住左键时围绕准星显示当前方块的破坏进度 -->
+  <div id="dig-progress" aria-hidden="true"><i></i></div>
+  <!-- 弓的蓄力条：蓄满后变金色 -->
+  <div id="bow-charge" aria-hidden="true"><i></i></div>
+
+  <!-- 游戏内状态 HUD -->
+  <div id="hud">
+    <div class="hud-brand">VOXEL <b>1001</b></div>
+    <div class="hud-row">
+      <div id="hud-dim" data-dimension="overworld">主世界</div>
+      <div id="hud-biome">平原</div>
+    </div>
+    <div class="hud-row">
+      <div id="hud-mode" data-mode="survival">生存模式</div>
+      <div id="hud-time">06:00 · 白天</div>
+    </div>
+    <div id="hud-health" class="hud-health"></div>
+    <div id="hud-pos">X 0&nbsp;&nbsp;Y 0&nbsp;&nbsp;Z 0</div>
+    <div id="hud-fps">FPS --</div>
+    <div id="hud-block">#001 草方块</div>
+  </div>
+
+  <div id="hud-hint">
+    <span>WASD 移动</span><span>空格 跳跃/上浮</span><span>Shift 疾跑</span>
+    <span>按住左键 挖掘/攻击</span><span>右键 放置/交互</span><span>1-9 / 滚轮 选择</span>
+    <span>Tab 快捷栏翻页</span><span>E 方块背包</span><span>M 切换模式</span>
+    <span>Q 方块/武器</span><span>武器模式右键 拉弓</span>
+    <span>Ctrl 下降</span><span>F 阴影</span><span>右键传送门 穿越三界</span><span>F5 保存</span><span>F9 读取</span>
+  </div>
+
+  <!-- 9 格快捷栏：1001 种方块按每页 9 种循环 -->
+  <div id="hotbar-wrap">
+    <div id="hotbar-name">草方块</div>
+    <!-- 手持状态：方块 / 武器模式切换、耐久与箭矢数量 -->
+    <div id="hand-bar">
+      <button id="hand-switch" type="button" title="切换方块与武器（Q）">方块模式</button>
+      <span id="hand-label">草方块</span>
+      <span id="hand-durability" hidden><i></i></span>
+      <span id="hand-arrows">箭 12</span>
+    </div>
+    <div id="hotbar"></div>
+    <div id="hotbar-page">001 / 1001 · 第 1 / 112 页 · E 全部方块</div>
+  </div>
+
+  <!-- 手机控制层：摇杆、四个动作键和快捷入口，各自跟踪独立触点 -->
+  <div id="mobile-controls" aria-hidden="true">
+    <div id="mobile-top-actions" role="group" aria-label="游戏菜单">
+      <button id="mobile-inventory" class="mobile-small-btn" type="button">背包</button>
+      <button id="mobile-quality" class="mobile-small-btn" type="button">画质</button>
+      <button id="mobile-pause" class="mobile-small-btn" type="button">暂停</button>
+    </div>
+    <div id="mobile-joystick" role="application" aria-label="八方向移动摇杆">
+      <div id="mobile-stick"></div>
+      <span class="joystick-label">移动</span>
+    </div>
+    <div id="mobile-actions" role="group" aria-label="动作按钮">
+      <button id="mobile-jump" class="mobile-action" data-action="jump" type="button">跳跃</button>
+      <button id="mobile-down" class="mobile-action" data-action="down" type="button">下蹲</button>
+      <button id="mobile-dig" class="mobile-action" data-action="dig" type="button">挖掘</button>
+      <button id="mobile-use" class="mobile-action" data-action="use" type="button">交互</button>
+    </div>
+  </div>
+
+  <!-- 大型方块背包：分类、搜索、分页与当前选择详情 -->
+  <div id="inventory" role="dialog" aria-modal="true" aria-label="方块背包">
+    <div class="inv-panel">
+      <header class="inv-header">
+        <div>
+          <div class="inv-eyebrow">BLOCK LIBRARY</div>
+          <h2>方块背包 <span>1001</span></h2>
+        </div>
+        <button id="inventory-close" class="icon-btn" type="button" title="关闭并继续游戏" aria-label="关闭">×</button>
+      </header>
+
+      <div class="inv-toolbar">
+        <label class="inv-search">
+          <span>搜索</span>
+          <input id="inventory-search" type="search" autocomplete="off" placeholder="中文名或编号，如：钻石 / 170" />
+        </label>
+        <div id="inventory-count" class="inv-count">共 1001 种</div>
+      </div>
+
+      <nav id="inventory-categories" class="inv-categories" aria-label="方块分类"></nav>
+
+      <div class="inv-content">
+        <div id="inventory-grid" aria-label="方块列表"></div>
+        <aside class="inv-details">
+          <div class="inv-preview-wrap"><img id="inventory-preview" alt="当前方块" draggable="false" /></div>
+          <div id="inventory-selected-name" class="inv-selected-name">草方块</div>
+          <div id="inventory-selected-meta" class="inv-selected-meta">#001 · 自然</div>
+          <div id="inventory-selected-stats" class="inv-stats"></div>
+          <p id="inventory-selected-desc" class="inv-selected-desc">固体方块 · 可放置 · 可挖掘</p>
+          <button id="inventory-equip" class="primary-btn" type="button">装备并返回</button>
+          <p class="inv-detail-tip">单击图标装备<br />双击图标直接返回</p>
+        </aside>
+      </div>
+
+      <footer class="inv-footer">
+        <button id="inventory-prev" class="page-btn" type="button">‹ 上一页</button>
+        <div id="inventory-page">第 1 / 8 页</div>
+        <button id="inventory-next" class="page-btn" type="button">下一页 ›</button>
+        <div class="inv-key-tip">E 返回游戏 · Esc 暂停</div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 方块 / 村民交互面板：箱子战利品、熔炉熔炼、村民交易与音符盒等 -->
+  <div id="interact" role="dialog" aria-modal="true" aria-label="方块交互">
+    <div class="interact-panel">
+      <header class="interact-header">
+        <div>
+          <div class="interact-eyebrow">INTERACTION</div>
+          <h3 id="interact-title">箱子</h3>
+        </div>
+        <button id="interact-close" class="icon-btn" type="button" title="关闭" aria-label="关闭">×</button>
+      </header>
+      <p id="interact-desc" class="interact-desc"></p>
+      <div id="interact-resources" class="pouch" aria-label="随身物资"></div>
+      <div id="interact-body" class="interact-body"></div>
+      <div id="interact-actions" class="interact-actions"></div>
+      <p class="interact-tip">Esc 或点击空白处关闭 · 生存模式下物资会被消耗</p>
+    </div>
+  </div>
+
+  <div id="toast" role="status"></div>
+
+  <!-- 加载 / 开始 / 暂停遮罩 -->
+  <div id="overlay">
+    <div class="panel">
+      <div class="panel-mark">VOXEL WORKSHOP</div>
+      <h1 id="overlay-title">体素工坊</h1>
+      <p id="overlay-sub" class="sub">球形三界 · 192³ 体素星球 · 1001 种程序化方块</p>
+
+      <div id="loading">
+        <div class="bar"><div id="loading-bar"></div></div>
+        <div id="loading-text">正在生成世界…</div>
+      </div>
+
+      <div id="mode-select" class="mode-select" role="group" aria-label="选择游戏模式">
+        <button class="mode-btn active" data-mode="survival" type="button">
+          <b>生存</b><span>生命 · 坠落伤害 · 夜间僵尸</span>
+        </button>
+        <button class="mode-btn" data-mode="creative" type="button">
+          <b>创造</b><span>飞行 · 瞬间破坏 · 免疫伤害</span>
+        </button>
+        <button class="mode-btn" data-mode="adventure" type="button">
+          <b>冒险</b><span>只能探索与交互，不能破坏方块</span>
+        </button>
+        <button class="mode-btn" data-mode="spectator" type="button">
+          <b>旁观</b><span>穿墙飞行 · 观察生物与村庄</span>
+        </button>
+      </div>
+
+      <ul class="keys">
+        <li><b>WASD</b> 移动 · <b>空格</b> 跳跃/上浮 · <b>Shift</b> 疾跑 · <b>Ctrl</b> 飞行下降</li>
+        <li><b>左键</b> 挖掘或攻击生物 · <b>右键</b> 放置方块 / 打开箱子、熔炉 / 与村民交易</li>
+        <li><b>M</b> 循环切换模式 · 创造模式<b>双击空格</b>开关飞行 · <b>1~9 / 滚轮</b> 选择 · <b>Tab</b> 翻页</li>
+        <li><b>Q</b> 在方块与武器间切换 · 武器模式<b>左键</b>挥剑/斧 · <b>右键</b>按住拉弓、松开射箭</li>
+        <li>地形分为 <b>平原 / 森林 / 沙漠 / 雪原 / 山地</b>，附近村庄里有房屋、水井、农田与村民</li>
+        <li>夜晚会刷新僵尸；生存模式受伤后吃面包可回血，<b>E</b> 打开 1001 方块背包</li>
+        <li><b>F5</b> 保存世界 · <b>F9</b> 读取存档 · 游戏中每 30 秒自动保存</li>
+      </ul>
+
+      <div class="save-controls" role="group" aria-label="本地存档">
+        <button id="save-btn" class="save-btn" type="button" disabled>保存世界</button>
+        <button id="load-btn" class="save-btn" type="button" disabled>读取存档</button>
+      </div>
+      <div id="save-status" class="save-status">正在检查本地存档…</div>
+      <button id="start-btn" type="button" disabled>正在加载…</button>
+      <p class="mobile-start-help">左摇杆移动 · 右侧空白处滑动视角<br />右侧按钮跳跃 / 下蹲 / 长按挖掘 / 交互</p>
+      <div id="error-box" class="error" hidden></div>
+      <p class="tip">桌面 Chrome / Edge · 手机横屏触控 · 存档仅保存在当前浏览器 · 清除网站数据会删除存档</p>
+    </div>
+  </div>
+
+  <!-- 本地经典脚本，无构建步骤，双击入口或启动静态服务器均可 -->
+  <script src="vendor/three.min.js"></script>
+  <script src="src/blockinfo.js"></script>
+  <script src="src/catalog.js"></script>
+  <script src="src/blocks.js"></script>
+  <script src="src/noise.js"></script>
+  <script src="src/biomes.js"></script>
+  <script src="src/terrain.js"></script>
+  <script src="src/world.js"></script>
+  <script src="src/plants.js"></script>
+  <script src="src/items.js"></script>
+  <script src="src/player.js"></script>
+  <script src="src/mobs.js"></script>
+  <script src="src/ui.js"></script>
+  <script src="src/main.js"></script>
+</body>
+</html>
